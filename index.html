@@ -138,6 +138,45 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .tab-btn { padding: 9px 16px; font-size: 0.78rem; font-weight: 700; cursor: pointer; border: none; background: none; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .15s; }
 .tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
 
+/* ===================== PRECIFICAÇÃO ===================== */
+.tax-lbl { font-size: 0.73rem; font-weight: 700; color: #555; margin-bottom: 8px; }
+.tax-note { font-size: 0.71rem; color: #6b6b8a; background: #f8f8fc; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; border-left: 3px solid #c4c2f0; }
+.tax-tip { font-weight: 400; color: #999; font-size: 0.68rem; }
+.tax-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.tax-field { flex: 1; min-width: 110px; }
+.tax-field label { display: block; font-size: 0.72rem; font-weight: 700; color: #555; margin-bottom: 4px; }
+
+.preco-box { background: linear-gradient(135deg, #1a1a2e 0%, #312e81 100%); border-radius: 12px; padding: 18px 20px; color: white; }
+.preco-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.preco-lbl { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .08em; color: #8a8aaa; }
+.preco-val { font-size: 2rem; font-weight: 800; margin-top: 4px; }
+.preco-unid { font-size: 0.9rem; font-weight: 400; color: #8a8aaa; margin-left: 4px; }
+.preco-badges { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.pb { background: rgba(255,255,255,.08); border-radius: 8px; padding: 8px 12px; min-width: 120px; }
+.pb span { display: block; font-size: 0.67rem; color: #8a8aaa; text-transform: uppercase; letter-spacing: .05em; }
+.pb strong { font-size: 1rem; font-weight: 700; }
+.pb strong.green { color: #4ade80; }
+.pb strong.red   { color: #f87171; }
+.preco-warn { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 14px; font-size: 0.8rem; color: #92400e; }
+
+.sim-title { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #6b6b8a; margin-bottom: 8px; }
+.sim-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+.sim-card { border: 2px solid #e8e8f0; border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: all .15s; min-width: 100px; flex: 1; text-align: center; }
+.sim-card:hover { border-color: #4f46e5; background: #f8f7ff; }
+.sim-card.sim-active { border-color: #4f46e5; background: #f0efff; }
+.sim-m { font-size: 0.7rem; font-weight: 700; color: #6b6b8a; text-transform: uppercase; }
+.sim-p { font-size: 0.95rem; font-weight: 800; color: #1a1a2e; margin: 3px 0; }
+.sim-l { font-size: 0.68rem; color: #16a34a; font-weight: 600; }
+
+.custom-box { background: #f8f7ff; border: 1px solid #dddaf8; border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
+.custom-ttl { font-size: 0.78rem; font-weight: 700; color: #4f46e5; margin-bottom: 4px; }
+.custom-res { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.cr-item { background: white; border: 1px solid #e8e8f0; border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 100px; }
+.cr-item span { display: block; font-size: 0.67rem; color: #6b6b8a; text-transform: uppercase; letter-spacing: .05em; }
+.cr-item strong { font-size: 0.95rem; font-weight: 700; }
+.cr-item strong.green { color: #16a34a; }
+.cr-item strong.red   { color: #dc2626; }
+
 @media (max-width: 500px) {
   .two-grid { grid-template-columns: 1fr; }
   .resumo-grid, .emp-cols { grid-template-columns: 1fr; }
@@ -281,6 +320,36 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   </div>
 
   <button class="calc-btn" id="calc-btn" onclick="calcular()" disabled>Calcular Custo Real</button>
+</div>
+
+<!-- PRECIFICAÇÃO -->
+<div id="pricing-section" style="display:none">
+  <div class="card">
+    <div class="card-title">5. Precificação — Quanto Cobrar?</div>
+
+    <div class="tax-lbl">Impostos sobre faturamento</div>
+    <div id="tax-inputs"></div>
+
+    <div class="input-group" style="margin-top:14px; max-width:280px">
+      <label>Margem de lucro desejada</label>
+      <div class="inp-wrap inp-pct">
+        <span class="pre">%</span>
+        <input type="number" id="margem" value="20" min="0" max="90" step="1" oninput="calcPreco()">
+      </div>
+    </div>
+
+    <div id="preco-result" style="margin-top:14px"></div>
+    <div id="sim-grid" style="margin-top:12px"></div>
+
+    <div class="custom-box">
+      <div class="custom-ttl">🧮 Simular com preço personalizado</div>
+      <div class="inp-wrap" style="max-width:280px; margin-top:8px">
+        <span class="pre">R$</span>
+        <input type="number" id="preco-custom" placeholder="Digite um preço" min="0" step="0.01" oninput="simCustom()">
+      </div>
+      <div id="custom-result" style="margin-top:10px"></div>
+    </div>
+  </div>
 </div>
 
 <!-- RESULTADOS -->
@@ -640,6 +709,148 @@ function calcular() {
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
   showTab('hol');
+
+  // ══════════════ PRECIFICAÇÃO ══════════════
+  window._custoDia = custoDia; // guarda custo/dia para usar no simulador
+  renderTaxInputs();
+  document.getElementById('pricing-section').style.display = 'block';
+  calcPreco();
+}
+
+// ─── PRECIFICAÇÃO ─────────────────────────────────────────
+function renderTaxInputs() {
+  const r = S.regime;
+  let html = '';
+  if (r === 'simples_a' || r === 'simples_iv') {
+    html = `
+      <div class="tax-row">
+        <div class="tax-field">
+          <label>Alíquota efetiva do DAS <span class="tax-tip">(consulte seu contador ou PGDAS-D)</span></label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span>
+            <input type="number" id="tx-das" value="6" min="0" max="33" step="0.1" oninput="calcPreco()">
+          </div>
+        </div>
+        ${r === 'simples_iv' ? `<div class="tax-field">
+          <label>ISS <span class="tax-tip">(se não incluso no DAS)</span></label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span>
+            <input type="number" id="tx-iss" value="0" min="0" max="10" step="0.5" oninput="calcPreco()">
+          </div>
+        </div>` : ''}
+      </div>`;
+  } else if (r === 'presumido') {
+    html = `
+      <p class="tax-note">Lucro Presumido · serviços (base 32%): valores pré-calculados, editáveis.</p>
+      <div class="tax-row">
+        <div class="tax-field"><label>PIS</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-pis" value="0.65" min="0" max="5" step="0.05" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>COFINS</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-cof" value="3.00" min="0" max="10" step="0.05" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>IRPJ estimado</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-irpj" value="4.80" min="0" max="20" step="0.1" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>CSLL estimado</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-csll" value="2.88" min="0" max="10" step="0.1" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>ISS municipal</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-iss" value="5.00" min="0" max="10" step="0.5" oninput="calcPreco()"></div></div>
+      </div>`;
+  } else { // lucro real
+    html = `
+      <p class="tax-note">Lucro Real · PIS/COFINS não-cumulativo. IRPJ+CSLL estimados sobre o lucro projetado.</p>
+      <div class="tax-row">
+        <div class="tax-field"><label>PIS</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-pis" value="1.65" min="0" max="5" step="0.05" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>COFINS</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-cof" value="7.60" min="0" max="15" step="0.05" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>IRPJ+CSLL (estimativa efetiva)</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-irpj" value="10.00" min="0" max="30" step="0.5" oninput="calcPreco()"></div></div>
+        <div class="tax-field"><label>ISS municipal</label>
+          <div class="inp-wrap inp-pct"><span class="pre">%</span><input type="number" id="tx-iss" value="5.00" min="0" max="10" step="0.5" oninput="calcPreco()"></div></div>
+      </div>`;
+  }
+  document.getElementById('tax-inputs').innerHTML = html;
+}
+
+function getTaxRate() {
+  const r = S.regime;
+  const g = id => { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) / 100 : 0; };
+  if (r === 'simples_a' || r === 'simples_iv') return g('tx-das') + g('tx-iss');
+  return g('tx-pis') + g('tx-cof') + g('tx-irpj') + g('tx-csll') + g('tx-iss');
+}
+
+function calcPreco() {
+  const custo    = window._custoDia || 0;
+  const taxRate  = getTaxRate();
+  const margem   = (parseFloat(document.getElementById('margem')?.value) || 0) / 100;
+  const divisor  = 1 - taxRate - margem;
+
+  if (divisor <= 0) {
+    document.getElementById('preco-result').innerHTML = `<div class="preco-warn">⚠️ Margem + impostos ≥ 100% — não é possível calcular preço.</div>`;
+    return;
+  }
+
+  const preco       = custo / divisor;
+  const impostos    = preco * taxRate;
+  const lucro       = preco * margem;
+  const unid        = S.mode === 'dia' ? '/dia' : '/mês';
+
+  document.getElementById('preco-result').innerHTML = `
+    <div class="preco-box">
+      <div class="preco-top">
+        <div>
+          <div class="preco-lbl">PREÇO SUGERIDO</div>
+          <div class="preco-val">${fmt(preco)}<span class="preco-unid">${unid}</span></div>
+        </div>
+        <div class="preco-badges">
+          <div class="pb"><span>Custo</span><strong>${fmt(custo)}</strong></div>
+          <div class="pb"><span>Impostos (${(taxRate*100).toFixed(1)}%)</span><strong class="red">${fmt(impostos)}</strong></div>
+          <div class="pb"><span>Lucro (${(margem*100).toFixed(1)}%)</span><strong class="green">${fmt(lucro)}</strong></div>
+        </div>
+      </div>
+    </div>`;
+
+  // Tabela de simulações
+  const margens = [5, 10, 15, 20, 25, 30, 40];
+  let simHtml = '<div class="sim-title">Simulação de margens</div><div class="sim-grid">';
+  margens.forEach(m => {
+    const div2 = 1 - taxRate - m / 100;
+    if (div2 <= 0) return;
+    const p = custo / div2;
+    const ativo = Math.round(margem * 100) === m;
+    simHtml += `<div class="sim-card ${ativo ? 'sim-active' : ''}" onclick="setMargem(${m})">
+      <div class="sim-m">${m}% margem</div>
+      <div class="sim-p">${fmt(p)}</div>
+      <div class="sim-l">Lucro: ${fmt(p * m / 100)}</div>
+    </div>`;
+  });
+  simHtml += '</div>';
+  document.getElementById('sim-grid').innerHTML = simHtml;
+
+  // Atualiza simulação de preço customizado se tiver valor
+  const customEl = document.getElementById('preco-custom');
+  if (customEl && customEl.value) simCustom();
+}
+
+function setMargem(m) {
+  document.getElementById('margem').value = m;
+  calcPreco();
+}
+
+function simCustom() {
+  const custo   = window._custoDia || 0;
+  const taxRate = getTaxRate();
+  const preco   = parseFloat(document.getElementById('preco-custom').value) || 0;
+  if (preco <= 0) { document.getElementById('custom-result').innerHTML = ''; return; }
+  const impostos    = preco * taxRate;
+  const lucro       = preco - custo - impostos;
+  const margemReal  = lucro / preco * 100;
+  const unid        = S.mode === 'dia' ? '/dia' : '/mês';
+  const cor         = lucro >= 0 ? 'green' : 'red';
+  document.getElementById('custom-result').innerHTML = `
+    <div class="custom-res">
+      <div class="cr-item"><span>Custo</span><strong>${fmt(custo)}</strong></div>
+      <div class="cr-item"><span>Impostos (${(taxRate*100).toFixed(1)}%)</span><strong class="red">${fmt(impostos)}</strong></div>
+      <div class="cr-item"><span>Lucro</span><strong class="${cor}">${fmt(lucro)}</strong></div>
+      <div class="cr-item"><span>Margem real</span><strong class="${cor}">${margemReal.toFixed(1)}%</strong></div>
+    </div>`;
 }
 
 function hRow(desc, venc, desc_) {
