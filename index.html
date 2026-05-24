@@ -215,10 +215,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
       <div class="lbl">Por Mês</div>
       <div class="sub">Informe o salário mensal</div>
     </button>
-    <button class="sel-btn" id="btn-hora" onclick="selMode('hora')">
-      <div class="icon">⏱</div>
-      <div class="lbl">Por Hora</div>
-      <div class="sub">Mostra custo/hora e custo/dia (8h)</div>
+    <button class="sel-btn" id="btn-dia" onclick="selMode('dia')">
+      <div class="icon">📅</div>
+      <div class="lbl">Por Dia</div>
+      <div class="sub">Informe o valor/hora — mostra custo diário (8h)</div>
     </button>
   </div>
 
@@ -434,8 +434,8 @@ function selType(t) {
 }
 function selMode(m) {
   S.mode = m;
-  ['mensal','hora'].forEach(x => document.getElementById('btn-'+x).classList.toggle('active', x === m));
-  document.getElementById('val-lbl').textContent = m === 'mensal' ? 'Salário Mensal Bruto' : 'Valor por Hora (R$/h)';
+  ['mensal','dia'].forEach(x => document.getElementById('btn-'+x).classList.toggle('active', x === m));
+  document.getElementById('val-lbl').textContent = m === 'mensal' ? 'Salário Mensal Bruto' : 'Valor por Hora (base de cálculo)';
   document.getElementById('valor').placeholder = m === 'mensal' ? 'Ex: 3000' : 'Ex: 20';
   updateBtn();
 }
@@ -457,101 +457,107 @@ function dash(v) { return v === 0 ? '<span class="dash">—</span>' : fmt(v); }
 
 // ─── CALCULAR ────────────────────────────────────────────
 function calcular() {
-  const reg     = REGIMES[S.regime];
-  const inputV  = parseFloat(document.getElementById('valor').value) || 0;
-  const DIAS_UTEIS = 22;
-  const vtDiario  = parseFloat(document.getElementById('vt-valor').value) || 0;
-  const vtTotal   = vtDiario * DIAS_UTEIS;
-  const vtPct     = parseFloat(document.getElementById('vt-pct').value)   / 100 || 0;
-  const vrDiario  = parseFloat(document.getElementById('vr-valor').value) || 0;
-  const vrTotal   = vrDiario * DIAS_UTEIS;
-  const vrDescDia = parseFloat(document.getElementById('vr-desc').value)  || 0;
-  const vrDesc    = vrDescDia * DIAS_UTEIS;
+  const reg      = REGIMES[S.regime];
+  const inputV   = parseFloat(document.getElementById('valor').value) || 0;
+  const DIAS     = 22; // dias úteis/mês
+  const vtDiario = parseFloat(document.getElementById('vt-valor').value) || 0;
+  const vtPct    = parseFloat(document.getElementById('vt-pct').value) / 100 || 0;
+  const vrDiario = parseFloat(document.getElementById('vr-valor').value) || 0;
+  const vrDescDia= parseFloat(document.getElementById('vr-desc').value) || 0;
 
-  const DSR = 4 / 26;
-  const isHora = S.mode === 'hora';
-  const isInt  = S.type === 'intermitente';
+  const DSR   = 4 / 26;
+  const isDia = S.mode === 'dia';
+  const isInt = S.type === 'intermitente';
+  const rat   = reg.hasRat ? S.rat / 100 : 0;
 
   // ── Base de cálculo ──
-  let base, baseHora;
-  if (isHora) {
-    baseHora = inputV;
-    if (isInt) {
-      base = inputV * (1 + DSR); // hora efetiva com DSR
-    } else {
-      base = inputV * 220; // converte para mensal
-    }
+  // "base" é sempre a unidade principal: mensal (modo mensal) ou diária (modo dia)
+  let base, baseHoraEfetiva;
+  if (isDia) {
+    // inputV = valor/hora; base = custo diário (8h), com DSR p/ intermitente
+    baseHoraEfetiva = isInt ? inputV * (1 + DSR) : inputV;
+    base = baseHoraEfetiva * 8; // diário
   } else {
-    base = inputV;
-    baseHora = null;
+    base = inputV; // mensal
   }
 
-  // ── Encargos patronais sobre base ──
-  const rat     = reg.hasRat ? S.rat / 100 : 0;
-  const inssP   = base * reg.inss;
-  const ratV    = base * rat;
-  const tercV   = base * reg.terc;
-  const fgtsV   = base * reg.fgts;
+  // ── VT / VR na unidade correta ──
+  // modo dia → valores diários diretos; modo mensal → diário × 22
+  const vtBase    = isDia ? vtDiario           : vtDiario * DIAS;
+  const vrBase    = isDia ? vrDiario           : vrDiario * DIAS;
+  const vrDescBase= isDia ? vrDescDia          : vrDescDia * DIAS;
+  // Desconto VT: mínimo entre vtPct×salário e valor do VT
+  const vtDescBase= vtBase > 0 ? Math.min(vtPct * base, vtBase) : 0;
+  const vtCustEmp = vtBase - vtDescBase;
+  const vrCustEmp = vrBase - vrDescBase;
 
-  // ── Provisões ──
-  const dec13        = base / 12;
-  const ferias       = base / 12;
-  const tercoFer     = ferias / 3;
-  const fgts13       = dec13 * reg.fgts;
-  const fgtsFer      = (ferias + tercoFer) * reg.fgts;
-  const inss13       = dec13 * reg.inss;
-  const inssFerias   = (ferias + tercoFer) * reg.inss;
-  const rat13        = dec13 * rat;
-  const ratFer       = (ferias + tercoFer) * rat;
-  const terc13       = dec13 * reg.terc;
-  const tercFer      = (ferias + tercoFer) * reg.terc;
+  // ── Encargos patronais ──
+  const inssP  = base * reg.inss;
+  const ratV   = base * rat;
+  const tercV  = base * reg.terc;
+  const fgtsV  = base * reg.fgts;
 
-  // ── INSS empregado (desconto no holerite) ──
-  const inssFuncionario = calcINSS(base);
+  // ── Provisões (na mesma unidade que base) ──
+  const dec13      = base / 12;
+  const ferias     = base / 12;
+  const tercoFer   = ferias / 3;
+  const fgts13     = dec13 * reg.fgts;
+  const fgtsFer    = (ferias + tercoFer) * reg.fgts;
+  const inss13     = dec13 * reg.inss;
+  const inssFerias = (ferias + tercoFer) * reg.inss;
+  const rat13      = dec13 * rat;
+  const ratFer     = (ferias + tercoFer) * rat;
+  const terc13     = dec13 * reg.terc;
+  const tercFer    = (ferias + tercoFer) * reg.terc;
 
-  // ── VT: desconto é mínimo entre (vtPct×base) e vtTotal ──
-  const vtDesc    = vtTotal > 0 ? Math.min(vtPct * base, vtTotal) : 0;
-  const vtCustEmp = vtTotal - vtDesc;    // custo líquido p/ empresa
-  const vrCustEmp = vrTotal - vrDesc;    // custo líquido p/ empresa
-
-  // ── IRRF ──
-  const baseIRRF = Math.max(0, base - inssFuncionario);
-  const irrf = calcIRRF(baseIRRF);
+  // ── INSS e IRRF do empregado (calculados sobre equivalente mensal) ──
+  const baseMensal      = isDia ? base * DIAS : base;
+  const inssFuncMensal  = calcINSS(baseMensal);
+  const inssFuncionario = isDia ? inssFuncMensal / DIAS : inssFuncMensal;
+  const baseIRRFMensal  = Math.max(0, baseMensal - inssFuncMensal);
+  const irrfMensal      = calcIRRF(baseIRRFMensal);
+  const irrf            = isDia ? irrfMensal / DIAS : irrfMensal;
 
   // ── Totais empregador ──
-  const totalEncargos   = inssP + ratV + tercV + fgtsV;
-  const totalProvisoes  = dec13 + ferias + tercoFer + fgts13 + fgtsFer
-                        + inss13 + inssFerias + rat13 + ratFer + terc13 + tercFer;
-  const totalBen        = vtCustEmp + vrCustEmp;
-  const totalEmpresaMes = base + totalEncargos + totalProvisoes + totalBen;
+  const totalEncargos  = inssP + ratV + tercV + fgtsV;
+  const totalProvisoes = dec13 + ferias + tercoFer + fgts13 + fgtsFer
+                       + inss13 + inssFerias + rat13 + ratFer + terc13 + tercFer;
+  const totalBen       = vtCustEmp + vrCustEmp;
+  const totalEmpresa   = base + totalEncargos + totalProvisoes + totalBen;
 
   // ── Totais holerite ──
-  const totalVencimentos = base + dec13 + ferias + tercoFer + vtTotal + vrTotal;
-  const totalDescontos   = inssFuncionario + irrf + vtDesc + vrDesc;
+  const totalVencimentos = base + dec13 + ferias + tercoFer + vtBase + vrBase;
+  const totalDescontos   = inssFuncionario + irrf + vtDescBase + vrDescBase;
   const liquido          = totalVencimentos - totalDescontos;
 
+  // ── Labels de unidade ──
+  const unid     = isDia ? '/dia' : '/mês';
+  const unidBen  = '/dia';
+
   // ══════════════ HOLERITE ══════════════
-  const meta = isHora
-    ? (isInt ? `Intermitente · Base/hora: ${fmt(inputV)} + DSR (${(DSR*100).toFixed(2)}%) = ${fmt(base)}/h` : `CLT Normal · ${fmt(inputV)}/h · Mensal (220h): ${fmt(base)}`)
-    : `${S.type === 'intermitente' ? 'CLT Intermitente' : 'CLT Normal'} · ${S.regime === 'simples_a' ? 'Simples (Anx.I-III,V)' : S.regime === 'simples_iv' ? 'Simples (Anx.IV)' : 'Lucro Presumido/Real'}`;
-  document.getElementById('hol-meta').textContent = meta;
+  let metaTxt = isDia
+    ? (isInt
+        ? `Intermitente · ${fmt(inputV)}/h + DSR ${(DSR*100).toFixed(2)}% → ${fmt(baseHoraEfetiva)}/h efetivo → ${fmt(base)}/dia`
+        : `CLT Normal · ${fmt(inputV)}/h → ${fmt(base)}/dia (8h)`)
+    : `${isInt ? 'CLT Intermitente' : 'CLT Normal'} · salário ${fmt(base)}/mês`;
+  document.getElementById('hol-meta').textContent = metaTxt;
 
   let hBody = '';
   hBody += `<tr class="sec-row"><td colspan="3">Vencimentos</td></tr>`;
-  hBody += hRow('Salário Base', base, 0);
-  if (isHora && isInt) hBody += hRow(`DSR (${(DSR*100).toFixed(2)}%)`, inputV * DSR, 0);
-  hBody += hRow('13° Salário Proporcional (1/12)', dec13, 0);
-  hBody += hRow('Férias Proporcionais (1/12)', ferias, 0);
-  hBody += hRow('1/3 sobre Férias', tercoFer, 0);
-  if (vtTotal > 0) hBody += hRow('Vale Transporte', vtTotal, 0);
-  if (vrTotal > 0) hBody += hRow('Vale Refeição / Alimentação', vrTotal, 0);
+  hBody += hRow(`Salário Base${unid}`, base, 0);
+  if (isDia && isInt) hBody += hRow(`DSR (${(DSR*100).toFixed(2)}% sobre ${fmt(inputV*8)})`, inputV * DSR * 8, 0);
+  hBody += hRow(`13° Salário Proporcional (1/12)${unid}`, dec13, 0);
+  hBody += hRow(`Férias Proporcionais (1/12)${unid}`, ferias, 0);
+  hBody += hRow(`1/3 sobre Férias${unid}`, tercoFer, 0);
+  if (vtBase > 0) hBody += hRow(`Vale Transporte${unidBen}`, vtBase, 0);
+  if (vrBase > 0) hBody += hRow(`Vale Refeição / Alimentação${unidBen}`, vrBase, 0);
 
   hBody += `<tr class="sec-row"><td colspan="3">Descontos</td></tr>`;
-  hBody += hRow('INSS (empregado)', 0, inssFuncionario);
-  if (irrf > 0) hBody += hRow('IRRF (estimativa s/ simplificada)', 0, irrf);
+  hBody += hRow(`INSS (empregado)${unid}`, 0, inssFuncionario);
+  if (irrf > 0) hBody += hRow(`IRRF (estimativa)${unid}`, 0, irrf);
   else hBody += `<tr><td>IRRF</td><td class="dash">—</td><td><span class="dash">Isento</span></td></tr>`;
-  if (vtDesc > 0) hBody += hRow('Desconto Vale Transporte', 0, vtDesc);
-  if (vrDesc > 0) hBody += hRow('Desconto Vale Refeição', 0, vrDesc);
+  if (vtDescBase > 0) hBody += hRow(`Desconto Vale Transporte${unidBen}`, 0, vtDescBase);
+  if (vrDescBase > 0) hBody += hRow(`Desconto Vale Refeição${unidBen}`, 0, vrDescBase);
 
   document.getElementById('hol-body').innerHTML = hBody;
   document.getElementById('hol-venc').textContent = fmt(totalVencimentos);
@@ -559,15 +565,12 @@ function calcular() {
   document.getElementById('hol-liq').textContent  = fmt(liquido);
 
   // ══════════════ EMPRESA ══════════════
-  const empLabel = isHora
-    ? (isInt ? 'Custo Total por Hora (c/ todos os encargos)' : 'Custo Total Mensal (equivalente 220h)')
-    : 'Custo Total Mensal';
-  document.getElementById('emp-label').textContent = empLabel;
-  document.getElementById('emp-total').textContent = fmt(totalEmpresaMes);
-  const encPct = ((totalEmpresaMes - base) / base * 100).toFixed(1);
-  document.getElementById('emp-sub').textContent = `Base: ${fmt(base)} + ${encPct}% em encargos, provisões e benefícios = custo real`;
+  document.getElementById('emp-label').textContent = isDia ? 'Custo Total por Dia (8h trabalhadas)' : 'Custo Total Mensal';
+  document.getElementById('emp-total').textContent = fmt(totalEmpresa);
+  const encPct = ((totalEmpresa - base) / base * 100).toFixed(1);
+  document.getElementById('emp-sub').textContent = `Base: ${fmt(base)}${unid} + ${encPct}% em encargos, provisões e benefícios`;
 
-  const custoHora = isHora ? totalEmpresaMes : totalEmpresaMes / 220;
+  const custoDia = isDia ? totalEmpresa : totalEmpresa / DIAS;
   document.getElementById('emp-cols').innerHTML = `
     <div class="emp-col"><div class="ecl">Encargos s/ Base</div><div class="ecv">${fmt(totalEncargos)}</div></div>
     <div class="emp-col"><div class="ecl">Provisões (13°/Fer.)</div><div class="ecv">${fmt(totalProvisoes)}</div></div>
@@ -575,15 +578,16 @@ function calcular() {
   `;
 
   let eBody = '';
-  if (isHora && isInt) {
-    eBody += secRow('Remuneração c/ DSR');
+  if (isDia && isInt) {
+    eBody += secRow('Remuneração Diária c/ DSR');
     eBody += eRow('Valor/hora contratado', '—', inputV);
     eBody += eRow(`DSR (${(DSR*100).toFixed(2)}%)`, pct(DSR), inputV * DSR);
-    eBody += eRow('Base efetiva por hora', '—', base);
-  } else if (isHora) {
-    eBody += secRow('Remuneração');
+    eBody += eRow('Valor/hora efetivo c/ DSR', '—', baseHoraEfetiva);
+    eBody += eRow('Base diária (8h)', '—', base);
+  } else if (isDia) {
+    eBody += secRow('Remuneração Diária');
     eBody += eRow('Valor/hora', '—', inputV);
-    eBody += eRow('Salário Mensal equivalente (220h)', '—', base);
+    eBody += eRow('Base diária (8h)', '—', base);
   } else {
     eBody += secRow('Remuneração');
     eBody += eRow('Salário Base', '—', base);
@@ -610,17 +614,26 @@ function calcular() {
   if (reg.terc > 0) eBody += eRow('  Terceiros s/ Férias+1/3', pct(reg.terc), tercFer);
   eBody += eRow('  FGTS s/ Férias+1/3', pct(reg.fgts), fgtsFer);
 
-  if (vtTotal > 0 || vrTotal > 0) {
+  if (vtBase > 0 || vrBase > 0) {
     eBody += secRow('Benefícios (custo líquido p/ empresa)');
-    if (vtTotal > 0) eBody += eRow(`Vale Transporte (${fmt(vtDiario)}/dia × 22 − desc. ${fmt(vtDesc)})`, '—', vtCustEmp);
-    if (vrTotal > 0) eBody += eRow(`Vale Refeição (${fmt(vrDiario)}/dia × 22 − desc. ${fmt(vrDesc)})`, '—', vrCustEmp);
+    if (vtBase > 0) {
+      const vtLabel = isDia
+        ? `Vale Transporte (${fmt(vtDiario)}/dia − desc. ${fmt(vtDescBase)}/dia)`
+        : `Vale Transporte (${fmt(vtDiario)}/dia × 22 = ${fmt(vtBase)} − desc. ${fmt(vtDescBase)})`;
+      eBody += eRow(vtLabel, '—', vtCustEmp);
+    }
+    if (vrBase > 0) {
+      const vrLabel = isDia
+        ? `Vale Refeição (${fmt(vrDiario)}/dia − desc. ${fmt(vrDescBase)}/dia)`
+        : `Vale Refeição (${fmt(vrDiario)}/dia × 22 = ${fmt(vrBase)} − desc. ${fmt(vrDescBase)})`;
+      eBody += eRow(vrLabel, '—', vrCustEmp);
+    }
   }
 
-  eBody += `<tr class="tot-row"><td colspan="2">CUSTO TOTAL PARA A EMPRESA</td><td>${fmt(totalEmpresaMes)}</td></tr>`;
+  eBody += `<tr class="tot-row"><td colspan="2">CUSTO TOTAL PARA A EMPRESA</td><td>${fmt(totalEmpresa)}</td></tr>`;
   document.getElementById('emp-body').innerHTML = eBody;
 
   // Custo/dia
-  const custoDia = custoHora * 8;
   document.getElementById('day-val').textContent = fmt(custoDia);
   document.getElementById('day-box-wrap').style.display = 'block';
 
