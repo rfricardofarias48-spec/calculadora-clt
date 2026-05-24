@@ -243,7 +243,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <div class="ben-block">
       <div class="ben-ttl"><span class="icon">🚌</span> Vale Transporte (VT)</div>
       <div class="input-group" style="margin-top:0">
-        <label>Valor mensal do VT</label>
+        <label>Valor diário do VT <span style="font-weight:400;color:#888">(× 22 dias úteis/mês)</span></label>
         <div class="inp-wrap">
           <span class="pre">R$</span>
           <input type="number" id="vt-valor" placeholder="0,00" min="0" step="0.01" oninput="updateBtn()">
@@ -255,21 +255,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
           <span class="pre">%</span>
           <input type="number" id="vt-pct" placeholder="6" value="6" min="0" max="100" step="0.5">
         </div>
-        <div class="ben-note">Legal: máx 6% do salário. Se 6% > valor do VT, desconto = valor do VT.</div>
+        <div class="ben-note">Legal: máx 6% do salário. Se 6% > valor do VT mensal, desconto = valor do VT.</div>
       </div>
     </div>
 
     <div class="ben-block">
       <div class="ben-ttl"><span class="icon">🍽</span> Vale Refeição / Alimentação (VR)</div>
       <div class="input-group" style="margin-top:0">
-        <label>Valor mensal do VR</label>
+        <label>Valor diário do VR <span style="font-weight:400;color:#888">(× 22 dias úteis/mês)</span></label>
         <div class="inp-wrap">
           <span class="pre">R$</span>
           <input type="number" id="vr-valor" placeholder="0,00" min="0" step="0.01" oninput="updateBtn()">
         </div>
       </div>
       <div class="input-group">
-        <label>Desconto do empregado (R$)</label>
+        <label>Desconto do empregado (R$/dia)</label>
         <div class="inp-wrap">
           <span class="pre">R$</span>
           <input type="number" id="vr-desc" placeholder="0,00" min="0" step="0.01">
@@ -459,10 +459,14 @@ function dash(v) { return v === 0 ? '<span class="dash">—</span>' : fmt(v); }
 function calcular() {
   const reg     = REGIMES[S.regime];
   const inputV  = parseFloat(document.getElementById('valor').value) || 0;
-  const vtTotal = parseFloat(document.getElementById('vt-valor').value) || 0;
-  const vtPct   = parseFloat(document.getElementById('vt-pct').value)   / 100 || 0;
-  const vrTotal = parseFloat(document.getElementById('vr-valor').value) || 0;
-  const vrDesc  = parseFloat(document.getElementById('vr-desc').value)  || 0;
+  const DIAS_UTEIS = 22;
+  const vtDiario  = parseFloat(document.getElementById('vt-valor').value) || 0;
+  const vtTotal   = vtDiario * DIAS_UTEIS;
+  const vtPct     = parseFloat(document.getElementById('vt-pct').value)   / 100 || 0;
+  const vrDiario  = parseFloat(document.getElementById('vr-valor').value) || 0;
+  const vrTotal   = vrDiario * DIAS_UTEIS;
+  const vrDescDia = parseFloat(document.getElementById('vr-desc').value)  || 0;
+  const vrDesc    = vrDescDia * DIAS_UTEIS;
 
   const DSR = 4 / 26;
   const isHora = S.mode === 'hora';
@@ -608,8 +612,8 @@ function calcular() {
 
   if (vtTotal > 0 || vrTotal > 0) {
     eBody += secRow('Benefícios (custo líquido p/ empresa)');
-    if (vtTotal > 0) eBody += eRow(`Vale Transporte (${fmt(vtTotal)} − desc. ${fmt(vtDesc)})`, '—', vtCustEmp);
-    if (vrTotal > 0) eBody += eRow(`Vale Refeição (${fmt(vrTotal)} − desc. ${fmt(vrDesc)})`, '—', vrCustEmp);
+    if (vtTotal > 0) eBody += eRow(`Vale Transporte (${fmt(vtDiario)}/dia × 22 − desc. ${fmt(vtDesc)})`, '—', vtCustEmp);
+    if (vrTotal > 0) eBody += eRow(`Vale Refeição (${fmt(vrDiario)}/dia × 22 − desc. ${fmt(vrDesc)})`, '—', vrCustEmp);
   }
 
   eBody += `<tr class="tot-row"><td colspan="2">CUSTO TOTAL PARA A EMPRESA</td><td>${fmt(totalEmpresaMes)}</td></tr>`;
