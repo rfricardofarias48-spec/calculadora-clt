@@ -553,48 +553,66 @@ function dash(v) { return v === 0 ? '<span class="dash">—</span>' : fmt(v); }
 function calcular() {
   const reg      = REGIMES[S.regime];
   const inputV   = parseFloat(document.getElementById('valor').value) || 0;
-  const DIAS     = 22; // dias úteis/mês
+  const DIAS     = 22;
   const vtDiario = parseFloat(document.getElementById('vt-valor').value) || 0;
   const vtPct    = parseFloat(document.getElementById('vt-pct').value) / 100 || 0;
   const vrDiario = parseFloat(document.getElementById('vr-valor').value) || 0;
   const vrDescDia= parseFloat(document.getElementById('vr-desc').value) || 0;
 
-  const DSR   = 4 / 26;
-  const isDia = S.mode === 'dia';
-  const isInt = S.type === 'intermitente';
-  const rat   = reg.hasRat ? S.rat / 100 : 0;
+  const DSR_RATE = 4 / 26;   // 15,3846...%
+  const isDia    = S.mode === 'dia';
+  const isInt    = S.type === 'intermitente';
+  const rat      = reg.hasRat ? S.rat / 100 : 0;
 
-  // ── Base de cálculo ──
-  // "base" é sempre a unidade principal: mensal (modo mensal) ou diária (modo dia)
-  let base, baseHoraEfetiva;
+  // ══ BASE DE CÁLCULO ══════════════════════════════════════
+  // base_puro = salário pelas horas trabalhadas (sem DSR)
+  // dsr_val   = valor do DSR sobre o salário puro (só intermitente)
+  // base      = base_puro + dsr_val = total da remuneração do período
+  //             sobre o qual incidem encargos e provisões
+  let base_puro, dsr_val, base;
+
   if (isDia) {
-    // inputV = valor/hora; base = custo diário (8h), com DSR p/ intermitente
-    baseHoraEfetiva = isInt ? inputV * (1 + DSR) : inputV;
-    base = baseHoraEfetiva * 8; // diário
+    base_puro = inputV * 8;                             // 8h × valor/hora
+    dsr_val   = isInt ? base_puro * DSR_RATE : 0;      // DSR só p/ intermitente
+    base      = base_puro + dsr_val;
   } else {
-    base = inputV; // mensal
+    base_puro = inputV;
+    dsr_val   = 0;
+    base      = inputV;
   }
 
-  // ── VT / VR na unidade correta ──
-  // modo dia → valores diários diretos; modo mensal → diário × 22
-  const vtBase    = isDia ? vtDiario           : vtDiario * DIAS;
-  const vrBase    = isDia ? vrDiario           : vrDiario * DIAS;
-  const vrDescBase= isDia ? vrDescDia          : vrDescDia * DIAS;
-  // Desconto VT: mínimo entre vtPct×salário e valor do VT
-  const vtDescBase= vtBase > 0 ? Math.min(vtPct * base, vtBase) : 0;
-  const vtCustEmp = vtBase - vtDescBase;
-  const vrCustEmp = vrBase - vrDescBase;
+  // ══ VT / VR ═══════════════════════════════════════════════
+  const vtBase     = isDia ? vtDiario          : vtDiario * DIAS;
+  const vrBase     = isDia ? vrDiario          : vrDiario * DIAS;
+  const vrDescBase = isDia ? vrDescDia         : vrDescDia * DIAS;
+  // Desconto VT: menor entre (vtPct × base_puro) e vtBase
+  const vtDescBase = vtBase > 0 ? Math.min(vtPct * base_puro, vtBase) : 0;
+  const vtCustEmp  = vtBase - vtDescBase;
+  const vrCustEmp  = vrBase - vrDescBase;
 
-  // ── Encargos patronais ──
+  // ══ ENCARGOS PATRONAIS (sobre base = base_puro + DSR) ════
   const inssP  = base * reg.inss;
   const ratV   = base * rat;
   const tercV  = base * reg.terc;
   const fgtsV  = base * reg.fgts;
 
-  // ── Provisões (na mesma unidade que base) ──
-  const dec13      = base / 12;
-  const ferias     = base / 12;
-  const tercoFer   = ferias / 3;
+  // ══ PROVISÕES ════════════════════════════════════════════
+  // Calculadas sobre base_puro; DSR gera reflexo próprio (separado)
+  const dec13_bp    = base_puro / 12;
+  const ferias_bp   = base_puro / 12;
+  const terco_bp    = ferias_bp / 3;
+
+  // Reflexo do DSR sobre provisões (DSR também gera 13°, férias, 1/3)
+  const dsr_dec13   = dsr_val / 12;
+  const dsr_ferias  = dsr_val / 12;
+  const dsr_terco   = dsr_val / 12 / 3;
+  const dsr_reflexo = dsr_dec13 + dsr_ferias + dsr_terco;
+
+  // Totais de provisão (base_puro + reflexo DSR) — base p/ encargos patronais s/ provisão
+  const dec13    = dec13_bp  + dsr_dec13;
+  const ferias   = ferias_bp + dsr_ferias;
+  const tercoFer = terco_bp  + dsr_terco;
+
   const fgts13     = dec13 * reg.fgts;
   const fgtsFer    = (ferias + tercoFer) * reg.fgts;
   const inss13     = dec13 * reg.inss;
@@ -604,45 +622,50 @@ function calcular() {
   const terc13     = dec13 * reg.terc;
   const tercFer    = (ferias + tercoFer) * reg.terc;
 
-  // ── INSS e IRRF do empregado (calculados sobre equivalente mensal) ──
+  // ══ INSS e IRRF DO EMPREGADO (sobre base total mensal) ══
   const baseMensal      = isDia ? base * DIAS : base;
   const inssFuncMensal  = calcINSS(baseMensal);
   const inssFuncionario = isDia ? inssFuncMensal / DIAS : inssFuncMensal;
   const baseIRRFMensal  = Math.max(0, baseMensal - inssFuncMensal);
-  const irrfMensal      = calcIRRF(baseIRRFMensal);
-  const irrf            = isDia ? irrfMensal / DIAS : irrfMensal;
+  const irrf            = isDia ? calcIRRF(baseIRRFMensal) / DIAS : calcIRRF(baseIRRFMensal);
 
-  // ── Totais empregador ──
+  // ══ TOTAIS EMPREGADOR ════════════════════════════════════
   const totalEncargos  = inssP + ratV + tercV + fgtsV;
   const totalProvisoes = dec13 + ferias + tercoFer + fgts13 + fgtsFer
                        + inss13 + inssFerias + rat13 + ratFer + terc13 + tercFer;
   const totalBen       = vtCustEmp + vrCustEmp;
   const totalEmpresa   = base + totalEncargos + totalProvisoes + totalBen;
 
-  // ── Totais holerite ──
-  const totalVencimentos = base + dec13 + ferias + tercoFer + vtBase + vrBase;
+  // ══ TOTAIS HOLERITE ══════════════════════════════════════
+  // Vencimentos = base_puro + dsr (separados) + provisões + benefícios
+  const totalVencimentos = base_puro + dsr_val + dec13 + ferias + tercoFer + vtBase + vrBase;
   const totalDescontos   = inssFuncionario + irrf + vtDescBase + vrDescBase;
   const liquido          = totalVencimentos - totalDescontos;
 
-  // ── Labels de unidade ──
-  const unid     = isDia ? '/dia' : '/mês';
-  const unidBen  = '/dia';
+  const unid    = isDia ? '/dia' : '/mês';
+  const unidBen = '/dia';
+  const dsrPct  = (DSR_RATE * 100).toFixed(4);
 
   // ══════════════ HOLERITE ══════════════
   let metaTxt = isDia
     ? (isInt
-        ? `Intermitente · ${fmt(inputV)}/h + DSR ${(DSR*100).toFixed(2)}% → ${fmt(baseHoraEfetiva)}/h efetivo → ${fmt(base)}/dia`
-        : `CLT Normal · ${fmt(inputV)}/h → ${fmt(base)}/dia (8h)`)
+        ? `CLT Intermitente · ${fmt(inputV)}/h · Salário base: ${fmt(base_puro)}/dia · DSR (${(DSR_RATE*100).toFixed(2)}%): ${fmt(dsr_val)} · Total: ${fmt(base)}/dia`
+        : `CLT Normal · ${fmt(inputV)}/h · Base diária (8h): ${fmt(base)}`)
     : `${isInt ? 'CLT Intermitente' : 'CLT Normal'} · salário ${fmt(base)}/mês`;
   document.getElementById('hol-meta').textContent = metaTxt;
 
   let hBody = '';
   hBody += `<tr class="sec-row"><td colspan="3">Vencimentos</td></tr>`;
-  hBody += hRow(`Salário Base${unid}`, base, 0);
-  if (isDia && isInt) hBody += hRow(`DSR (${(DSR*100).toFixed(2)}% sobre ${fmt(inputV*8)})`, inputV * DSR * 8, 0);
-  hBody += hRow(`13° Salário Proporcional (1/12)${unid}`, dec13, 0);
-  hBody += hRow(`Férias Proporcionais (1/12)${unid}`, ferias, 0);
-  hBody += hRow(`1/3 sobre Férias${unid}`, tercoFer, 0);
+  hBody += hRow(`Salário base (8h × ${fmt(inputV)})`, base_puro, 0);
+  if (isInt && isDia) {
+    hBody += hRow(`DSR — Descanso Semanal Remunerado (${(DSR_RATE*100).toFixed(2)}%)`, dsr_val, 0);
+  }
+  hBody += hRow(`13° Salário Proporcional (8,33% s/ base pura)`, dec13_bp, 0);
+  hBody += hRow(`Férias Proporcionais (8,33% s/ base pura)`, ferias_bp, 0);
+  hBody += hRow(`1/3 Constitucional s/ Férias (2,78% s/ base pura)`, terco_bp, 0);
+  if (isInt && isDia && dsr_reflexo > 0) {
+    hBody += hRow(`Reflexo DSR s/ 13°, Férias e 1/3`, dsr_reflexo, 0);
+  }
   if (vtBase > 0) hBody += hRow(`Vale Transporte${unidBen}`, vtBase, 0);
   if (vrBase > 0) hBody += hRow(`Vale Refeição / Alimentação${unidBen}`, vrBase, 0);
 
@@ -662,48 +685,48 @@ function calcular() {
   document.getElementById('emp-label').textContent = isDia ? 'Custo Total por Dia (8h trabalhadas)' : 'Custo Total Mensal';
   document.getElementById('emp-total').textContent = fmt(totalEmpresa);
   const encPct = ((totalEmpresa - base) / base * 100).toFixed(1);
-  document.getElementById('emp-sub').textContent = `Base: ${fmt(base)}${unid} + ${encPct}% em encargos, provisões e benefícios`;
+  document.getElementById('emp-sub').textContent = `Remuneração total: ${fmt(base)}${unid} + ${encPct}% em encargos, provisões e benefícios`;
 
   const custoDia = isDia ? totalEmpresa : totalEmpresa / DIAS;
   document.getElementById('emp-cols').innerHTML = `
-    <div class="emp-col"><div class="ecl">Encargos s/ Base</div><div class="ecv">${fmt(totalEncargos)}</div></div>
+    <div class="emp-col"><div class="ecl">Encargos s/ Remuneração</div><div class="ecv">${fmt(totalEncargos)}</div></div>
     <div class="emp-col"><div class="ecl">Provisões (13°/Fer.)</div><div class="ecv">${fmt(totalProvisoes)}</div></div>
     <div class="emp-col"><div class="ecl">Benefícios (líq.)</div><div class="ecv">${fmt(totalBen)}</div></div>
   `;
 
   let eBody = '';
   if (isDia && isInt) {
-    eBody += secRow('Remuneração Diária c/ DSR');
-    eBody += eRow('Valor/hora contratado', '—', inputV);
-    eBody += eRow(`DSR (${(DSR*100).toFixed(2)}%)`, pct(DSR), inputV * DSR);
-    eBody += eRow('Valor/hora efetivo c/ DSR', '—', baseHoraEfetiva);
-    eBody += eRow('Base diária (8h)', '—', base);
+    eBody += secRow('Remuneração Diária (base para encargos)');
+    eBody += eRow(`Salário base (8h × ${fmt(inputV)}/h)`, '—', base_puro);
+    eBody += eRow(`DSR — Descanso Semanal Remunerado (${(DSR_RATE*100).toFixed(2)}%)`, pct(DSR_RATE), dsr_val);
+    eBody += eRow('Total remuneração diária', '—', base);
   } else if (isDia) {
     eBody += secRow('Remuneração Diária');
-    eBody += eRow('Valor/hora', '—', inputV);
-    eBody += eRow('Base diária (8h)', '—', base);
+    eBody += eRow(`Salário base (8h × ${fmt(inputV)}/h)`, '—', base_puro);
   } else {
     eBody += secRow('Remuneração');
     eBody += eRow('Salário Base', '—', base);
   }
 
-  eBody += secRow('Encargos Patronais sobre Base');
+  eBody += secRow(`Encargos Patronais (s/ remuneração total ${fmt(base)})`);
   if (reg.inss > 0) eBody += eRow('INSS Patronal', pct(reg.inss), inssP);
   if (rat > 0)      eBody += eRow('RAT (risco acidente)', pct(rat), ratV);
   if (reg.terc > 0) eBody += eRow('Terceiros (Sistema S)', pct(reg.terc), tercV);
   eBody += eRow('FGTS', pct(reg.fgts), fgtsV);
 
   eBody += secRow('Provisão 13° Salário');
-  eBody += eRow('13° proporcional (1/12)', '8,33%', dec13);
-  if (reg.inss > 0) eBody += eRow('  INSS s/ 13°', pct(reg.inss), inss13);
+  eBody += eRow('  13° s/ salário base (8,33%)', '—', dec13_bp);
+  if (isInt && isDia) eBody += eRow('  Reflexo DSR s/ 13° (8,33% do DSR)', '—', dsr_dec13);
+  if (reg.inss > 0) eBody += eRow('  INSS patronal s/ 13°', pct(reg.inss), inss13);
   if (rat > 0)      eBody += eRow('  RAT s/ 13°', pct(rat), rat13);
   if (reg.terc > 0) eBody += eRow('  Terceiros s/ 13°', pct(reg.terc), terc13);
   eBody += eRow('  FGTS s/ 13°', pct(reg.fgts), fgts13);
 
-  eBody += secRow('Provisão Férias + 1/3');
-  eBody += eRow('Férias proporcionais (1/12)', '8,33%', ferias);
-  eBody += eRow('  1/3 Constitucional s/ Férias', '2,78%', tercoFer);
-  if (reg.inss > 0) eBody += eRow('  INSS s/ Férias+1/3', pct(reg.inss), inssFerias);
+  eBody += secRow('Provisão Férias + 1/3 Constitucional');
+  eBody += eRow('  Férias s/ salário base (8,33%)', '—', ferias_bp);
+  eBody += eRow('  1/3 Constitucional s/ férias base (2,78%)', '—', terco_bp);
+  if (isInt && isDia) eBody += eRow('  Reflexo DSR s/ Férias + 1/3', '—', dsr_ferias + dsr_terco);
+  if (reg.inss > 0) eBody += eRow('  INSS patronal s/ Férias+1/3', pct(reg.inss), inssFerias);
   if (rat > 0)      eBody += eRow('  RAT s/ Férias+1/3', pct(rat), ratFer);
   if (reg.terc > 0) eBody += eRow('  Terceiros s/ Férias+1/3', pct(reg.terc), tercFer);
   eBody += eRow('  FGTS s/ Férias+1/3', pct(reg.fgts), fgtsFer);
